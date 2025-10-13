@@ -36,4 +36,3 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python review_bot.py
-give discription that how this code is help in automation
