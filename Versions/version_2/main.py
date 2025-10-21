@@ -2,12 +2,15 @@ import requests
 import os
 import subprocess
 import tempfile
+import re
 from dotenv import load_dotenv
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema.output_parser import StrOutputParser
 from langchain_groq import ChatGroq
 
-# 1. Load API Keys
+# =====================================================
+# 1. Load API Keys & GitHub Config
+# =====================================================
 load_dotenv()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GROQ_API_KEY = os.getenv("API_KEY")
@@ -18,7 +21,10 @@ pr_number = os.getenv("PR_NUMBER")
 if not GROQ_API_KEY:
     raise ValueError("❌ GROQ_API_KEY not found. Please set it in .env file.")
 
-# 2. Fetch PR Diff
+
+# =====================================================
+# 2. Fetch PR Diff from GitHub
+# =====================================================
 def fetch_pr_diff(owner, repo, pr_number, token):
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}"
     headers = {"Authorization": f"token {token}"}
@@ -29,31 +35,96 @@ def fetch_pr_diff(owner, repo, pr_number, token):
     diff = requests.get(diff_url, headers=headers).text
     return diff
 
-# 3. Run static analysis (example: pylint)
-def run_static_analysis(diff_text):
-    """Run pylint on changed files (extracted from diff)."""
-    static_results = []
 
-    # Create temporary folder for analysis
+# =====================================================
+# 3. Detect Languages from Diff
+# =====================================================
+def detect_languages_from_diff(diff_text):
+    """Infer file types/languages from PR diff."""
+    extensions = re.findall(r'\+\+\+ b/.*\.(\w+)', diff_text)
+    languages = set()
+    for ext in extensions:
+        ext = ext.lower()
+        if ext in ["py"]:
+            languages.add("python")
+        elif ext in ["js", "jsx", "ts", "tsx"]:
+            languages.add("javascript")
+        elif ext in ["java"]:
+            languages.add("java")
+        elif ext in ["cpp", "cc", "cxx", "h", "hpp"]:
+            languages.add("cpp")
+        elif ext in ["go"]:
+            languages.add("go")
+        elif ext in ["kt"]:
+            languages.add("kotlin")
+        elif ext in ["rs"]:
+            languages.add("rust")
+    return list(languages)
+
+
+# =====================================================
+# 4. Run Static Analysis by Language
+# =====================================================
+def run_static_analysis(diff_text):
+    """Run appropriate static analyzers depending on language."""
+    languages = detect_languages_from_diff(diff_text)
+    if not languages:
+        return "⚠️ No recognizable programming language found in PR diff."
+
+    results = []
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Save the diff text to a temporary file for reference
+        # Save diff for context (optional)
         diff_path = os.path.join(tmpdir, "pr_diff.patch")
         with open(diff_path, "w", encoding="utf-8") as f:
             f.write(diff_text)
 
-        # (Optional) If you have repo checked out locally, you can run:
-        # pylint_output = subprocess.getoutput(f"pylint path/to/changed/files")
+        # Loop through each detected language
+        for lang in languages:
+            results.append(f"=== 🔍 Static Analysis for {lang.upper()} ===")
 
-        # For demonstration, we run pylint on the temporary folder
-        try:
-            pylint_result = subprocess.getoutput("pylint --exit-zero .")
-            static_results.append("Pylint Results:\n" + pylint_result)
-        except Exception as e:
-            static_results.append(f"Error running pylint: {e}")
+            try:
+                if lang == "python":
+                    pylint_output = subprocess.getoutput("pylint --exit-zero .")
+                    flake8_output = subprocess.getoutput("flake8 . --exit-zero")
+                    bandit_output = subprocess.getoutput("bandit -r . --exit-zero")
+                    mypy_output = subprocess.getoutput("mypy --ignore-missing-imports .")
+                    results.extend([
+                        "🧩 Pylint:\n" + pylint_output,
+                        "🎯 Flake8:\n" + flake8_output,
+                        "🔒 Bandit:\n" + bandit_output,
+                        "🧠 Mypy:\n" + mypy_output
+                    ])
 
-    return "\n\n".join(static_results)
+                elif lang == "java":
+                    results.append(subprocess.getoutput("checkstyle -c /google_checks.xml ."))
 
-# 4. Post review to GitHub
+                elif lang == "javascript":
+                    results.append(subprocess.getoutput("eslint . --max-warnings=0"))
+
+                elif lang == "cpp":
+                    results.append(subprocess.getoutput("cppcheck --enable=all ."))
+
+                elif lang == "go":
+                    results.append(subprocess.getoutput("staticcheck ./..."))
+
+                elif lang == "kotlin":
+                    results.append(subprocess.getoutput("detekt --input ."))
+
+                elif lang == "rust":
+                    results.append(subprocess.getoutput("cargo clippy -- -D warnings"))
+
+                else:
+                    results.append(f"No analyzer configured for {lang}")
+
+            except Exception as e:
+                results.append(f"Error running analyzer for {lang}: {e}")
+
+    return "\n\n".join(results)
+
+
+# =====================================================
+# 5. Post Review Comment to GitHub
+# =====================================================
 def post_review_comment(owner, repo, pr_number, token, review_body):
     url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments"
     headers = {
@@ -66,7 +137,10 @@ def post_review_comment(owner, repo, pr_number, token, review_body):
         raise Exception(f"❌ Failed to post comment: {response.json()}")
     return response.json()
 
-# 5. Initialize Groq LLM
+
+# =====================================================
+# 6. Initialize Groq LLM (AI Reviewer)
+# =====================================================
 llm = ChatGroq(
     model="llama-3.3-70b-versatile",
     temperature=0.3,
@@ -77,35 +151,39 @@ parser = StrOutputParser()
 review_prompt = ChatPromptTemplate.from_messages([
     ("system",
      "You are a senior software engineer reviewing a GitHub Pull Request. "
-     "Use both the static analysis evidence and the diff to produce precise, "
-     "constructive comments."),
+     "You will receive the PR diff and static analysis results. "
+     "Provide clear, concise, and technically correct review comments. "
+     "Focus on correctness, maintainability, security, and readability."),
     ("human",
      "Here is the PR diff:\n\n{diff}\n\n"
      "And here are static analysis results:\n\n{static}\n\n"
-     "Combine these insights to produce a high-quality review. "
-     "Mention file names, potential issues, and improvements clearly.")
+     "Now provide a professional GitHub PR review. Include actionable feedback, "
+     "specific file references, and improvement suggestions.")
 ])
 
 review_chain = review_prompt | llm | parser
 
-# 6. Main
+
+# =====================================================
+# 7. Main Logic
+# =====================================================
 if __name__ == "__main__":
     try:
         diff_text = fetch_pr_diff(owner, repo, pr_number, GITHUB_TOKEN)
         print("✅ Diff fetched successfully.\n")
 
-        print("🔍 Running static analysis...")
+        print("🔍 Detecting language and running static analysis...")
         static_output = run_static_analysis(diff_text)
 
-        print("🤖 Sending diff + analyzer output to AI reviewer...\n")
+        print("🤖 Sending diff + analyzer results to AI reviewer...\n")
         review = review_chain.invoke({
             "diff": diff_text[:4000],
-            "static": static_output[:4000]  # avoid token overflow
+            "static": static_output[:4000]
         })
 
-        print("=== AI REVIEW RESULT ===")
+        print("=== 🧠 AI REVIEW RESULT ===")
         print(review)
-        print("========================")
+        print("===========================")
 
         print("📌 Posting review comment to GitHub...")
         comment = post_review_comment(owner, repo, pr_number, GITHUB_TOKEN, review)
