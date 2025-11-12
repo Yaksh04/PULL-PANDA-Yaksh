@@ -1,0 +1,50 @@
+{
+  "timestamp": "20250923_160248",
+  "pr_number": 3,
+  "selected_prompt": "Self-Consistency",
+  "review_score": 7.14,
+  "features": {
+    "num_lines": 46,
+    "num_files": 1,
+    "additions": 39,
+    "deletions": 1,
+    "net_changes": 38,
+    "has_comments": 1,
+    "has_functions": 0,
+    "has_imports": 0,
+    "has_test": 0,
+    "has_docs": 0,
+    "has_config": 0,
+    "is_python": 0,
+    "is_js": 0,
+    "is_java": 0
+  },
+  "heuristics": {
+    "length_chars": 961,
+    "length_words": 152,
+    "bullet_points": 0,
+    "mentions_bug": false,
+    "mentions_suggest": false,
+    "sections_presence": {
+      "summary": true,
+      "bugs": false,
+      "errors": false,
+      "code quality": false,
+      "suggestions": false,
+      "improvements": true,
+      "tests": false,
+      "positive": false,
+      "final review": false
+    }
+  },
+  "meta_evaluation": {
+    "clarity": 9,
+    "usefulness": 9,
+    "depth": 8,
+    "actionability": 9,
+    "positivity": 8,
+    "explain": "Review B is selected for its clear summary, suggestions for improvement, and highlighting of benefits, making it a well-rounded and actionable review."
+  },
+  "training_data_size": 5,
+  "model_trained": true
+}

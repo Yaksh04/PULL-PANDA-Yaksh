@@ -1,0 +1,19 @@
+<<<<<<< HEAD
+- Documentation: Missing description for `divide` function regarding division by zero.
+- Suggestion: Add note about potential ZeroDivisionError and consider adding input validation.
+
+- Code example: Usage section only demonstrates `add` function, lacks examples for `subtract`, `multiply`, and `divide`.
+- Suggestion: Include example usage for all available functions to improve documentation completeness. 
+
+- Documentation: No installation or import instructions provided for the calculator library.
+- Suggestion: Add section on how to install and import the library to enhance user experience.
+=======
+- Documentation: Missing description for `divide` function regarding division by zero.
+- Suggestion: Add note about potential ZeroDivisionError and consider adding input validation.
+
+- Code example: Usage section only demonstrates `add` function, lacks examples for `subtract`, `multiply`, and `divide`.
+- Suggestion: Include example usage for all available functions to improve documentation completeness. 
+
+- Documentation: No installation or import instructions provided for the calculator library.
+- Suggestion: Add section on how to install and import the library to enhance user experience.
+>>>>>>> 5f7bd0e (Organised the folder for PR Reviews and also implemented the Online Estimation Part. I have created a seperate file for Online Estimation For now just in case to compare the two versions. Later i will add the Online estimation part to version 1.2.1 and make the current as version 1.2.0)
