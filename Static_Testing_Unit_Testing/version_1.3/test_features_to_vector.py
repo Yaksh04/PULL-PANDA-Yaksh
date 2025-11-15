@@ -10,57 +10,59 @@ from unittest.mock import Mock, patch, MagicMock, mock_open
 from online_estimator_version import IterativePromptSelector
 
 
-class TestFeaturesToVector(unittest.TestCase):
-    """Tests for features_to_vector method"""
-
-    def setUp(self):
-        self.selector = IterativePromptSelector()
-
-    def test_features_to_vector_complete_features(self):
-        """Test conversion with all features present"""
+class TestFeaturesToVector:
+    """Tests for features_to_vector method."""
+    
+    def test_complete_features_conversion(self, selector_instance):
+        """Test conversion of complete feature dict to vector."""
         features = {
-            'num_lines': 100, 'num_files': 5, 'additions': 50,
-            'deletions': 20, 'net_changes': 30, 'has_comments': 1,
-            'has_functions': 1, 'has_imports': 1, 'has_test': 0,
-            'has_docs': 1, 'has_config': 0, 'is_python': 1,
-            'is_js': 0, 'is_java': 0
+            'num_lines': 100,
+            'num_files': 5,
+            'additions': 50,
+            'deletions': 20,
+            'net_changes': 30,
+            'has_comments': 1,
+            'has_functions': 1,
+            'has_imports': 1,
+            'has_test': 0,
+            'has_docs': 0,
+            'has_config': 0,
+            'is_python': 1,
+            'is_js': 0,
+            'is_java': 0
         }
+        vector = selector_instance.features_to_vector(features)
         
-        vector = self.selector.features_to_vector(features)
-        
-        self.assertIsInstance(vector, np.ndarray)
-        self.assertEqual(len(vector), 14)
-        self.assertEqual(vector[0], 100)  # num_lines
-        self.assertEqual(vector[1], 5)    # num_files
-        self.assertEqual(vector[-1], 0)   # is_java
-
-    def test_features_to_vector_missing_features(self):
-        """Test conversion with missing features (should default to 0)"""
+        assert len(vector) == 14
+        assert vector[0] == 100
+        assert vector[1] == 5
+        assert isinstance(vector, np.ndarray)
+    
+    def test_missing_features_default_to_zero(self, selector_instance):
+        """Test that missing features default to zero."""
         features = {'num_lines': 50}
+        vector = selector_instance.features_to_vector(features)
         
-        vector = self.selector.features_to_vector(features)
+        assert len(vector) == 14
+        assert vector[0] == 50
+        assert vector[1] == 0
+        assert np.sum(vector[2:]) == 0
+    
+    def test_empty_features_dict(self, selector_instance):
+        """Test conversion of empty features dict."""
+        vector = selector_instance.features_to_vector({})
         
-        self.assertEqual(len(vector), 14)
-        self.assertEqual(vector[0], 50)
-        # All other values should be 0
-        self.assertTrue(all(v == 0 for v in vector[1:]))
-
-    def test_features_to_vector_empty_dict(self):
-        """Test conversion with empty features dict"""
-        vector = self.selector.features_to_vector({})
-        
-        self.assertEqual(len(vector), 14)
-        self.assertTrue(all(v == 0 for v in vector))
-
-    def test_features_to_vector_extra_features(self):
-        """Test that extra features are ignored"""
+        assert len(vector) == 14
+        assert np.all(vector == 0)
+    
+    def test_extra_features_ignored(self, selector_instance):
+        """Test that extra features in dict are ignored."""
         features = {
             'num_lines': 10,
             'extra_feature': 999,
-            'another_extra': 'should be ignored'
+            'another_extra': 'ignored'
         }
+        vector = selector_instance.features_to_vector(features)
         
-        vector = self.selector.features_to_vector(features)
-        
-        self.assertEqual(len(vector), 14)
-        self.assertEqual(vector[0], 10)
+        assert len(vector) == 14
+        assert vector[0] == 10
