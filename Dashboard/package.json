@@ -3,19 +3,19 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
-  "scripts": {
-    "dev:server": "tsx server/index.ts",
-    "dev:client": "vite",
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+ "scripts": {
+  "dev:server": "tsx server/index.ts",
+  "dev:client": "vite",
+  "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
 
-    "build": "npm run build:client && npm run build:server",
+  "build": "npm run build:client && npm run build:server",
 
-    "build:client": "vite build",
+  "build:client": "vite build",
 
-    "build:server": "esbuild server/index.ts --bundle --platform=node --target=node18 --outfile=dist/server/index.js",
+  "build:server": "esbuild server/index.ts --bundle --platform=node --format=esm --target=node18 --external:./client/** --external:vite --outfile=dist/server/index.js",
 
-    "start": "node dist/server/index.js"
-  },
+  "start": "node dist/server/index.js"
+},
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
