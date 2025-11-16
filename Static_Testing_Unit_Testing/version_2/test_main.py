@@ -2,26 +2,31 @@
 # file system, or external-tool side effects. It targets functions in Versions/version_2/main.py.
 
 import importlib.util
+import runpy
+import subprocess
 import sys
 import types
 from pathlib import Path
-import subprocess
-import json
+
 import pytest
 
-# Helper to import the target module with safe stubs for external packages used at import-time.
-def import_main_module(tmp_path, monkeypatch):
-    """
-    Arrange: prepare fake external modules and environment, then import the target main.py module.
-    Returns the imported module.
-    """
-    # Prepare fake external modules to prevent side effects on import
-    # 1) dotenv.load_dotenv
+
+def setup_fake_dependencies():
+    """Install lightweight stand-ins for heavy optional dependencies."""
+    for name in [
+        "dotenv",
+        "langchain",
+        "langchain.prompts",
+        "langchain.schema",
+        "langchain.schema.output_parser",
+        "langchain_groq",
+    ]:
+        sys.modules.pop(name, None)
+
     fake_dotenv = types.ModuleType("dotenv")
     fake_dotenv.load_dotenv = lambda *args, **kwargs: None
     sys.modules["dotenv"] = fake_dotenv
 
-    # 2) langchain.prompts.ChatPromptTemplate and chaining support
     fake_langchain = types.ModuleType("langchain")
     fake_prompts = types.ModuleType("langchain.prompts")
 
@@ -32,6 +37,7 @@ def import_main_module(tmp_path, monkeypatch):
     class DummyChain:
         def __or__(self, other):
             return self
+
         def invoke(self, kwargs):
             return "DUMMY_REVIEW_TEXT"
 
@@ -50,31 +56,37 @@ def import_main_module(tmp_path, monkeypatch):
 
     fake_output_parser.StrOutputParser = DummyStrOutputParser
 
-    # Insert into sys.modules
     sys.modules["langchain"] = fake_langchain
     sys.modules["langchain.prompts"] = fake_prompts
     sys.modules["langchain.schema"] = fake_schema
     sys.modules["langchain.schema.output_parser"] = fake_output_parser
 
-    # 3) langchain_groq.ChatGroq - dummy that does not perform network
     fake_langchain_groq = types.ModuleType("langchain_groq")
+
     class DummyChatGroq:
         def __init__(self, *args, **kwargs):
-            # accept parameters but do nothing
             pass
+
     fake_langchain_groq.ChatGroq = DummyChatGroq
     sys.modules["langchain_groq"] = fake_langchain_groq
 
-    # 4) Ensure environment variables used during import exist to avoid ValueErrors
-    monkeypatch.setenv("API_KEY", "DUMMY_GROQ_KEY")
-    # GitHub related env vars can be missing; main.py handles that by printing a warning.
-    # Now import the module using a path relative to this test file
-    project_root = Path(__file__).resolve().parents[2]  # go up to repository root
-    target_path = project_root / "Versions" / "version_2" / "main.py"
-    spec = importlib.util.spec_from_file_location("target_main", str(target_path))
+
+def import_main_module(tmp_path, monkeypatch, *, set_api_key=True):
+    """Import version_2/main.py with patched dependencies and environment."""
+
+    setup_fake_dependencies()
+
+    if set_api_key:
+        monkeypatch.setenv("API_KEY", "DUMMY_GROQ_KEY")
+    else:
+        monkeypatch.delenv("API_KEY", raising=False)
+
+    target_path = Path(__file__).resolve().parent / "main.py"
+    spec = importlib.util.spec_from_file_location("main", str(target_path))
     module = importlib.util.module_from_spec(spec)
-    # Insert into sys.modules so internal imports in the module that reference its name work
-    sys.modules["target_main"] = module
+
+    sys.modules.pop("main", None)
+    sys.modules["main"] = module
     spec.loader.exec_module(module)
     return module
 
@@ -95,7 +107,7 @@ def test_fetch_pr_diff_success_returns_diff(monkeypatch, tmp_path):
         text = "+++ b/path/to/file.py\n- old\n+ new\n"
 
     calls = {"count": 0}
-    def fake_get(url, headers=None):
+    def fake_get(url, headers=None, **kwargs):
         # Act as first call (PR endpoint) then second call (diff_url)
         calls["count"] += 1
         if calls["count"] == 1:
@@ -119,7 +131,7 @@ def test_fetch_pr_diff_non_200_raises_exception(monkeypatch, tmp_path):
         status_code = 500
         def json(self):
             return {"message": "server error"}
-    monkeypatch.setattr("requests.get", lambda url, headers=None: ErrResp())
+    monkeypatch.setattr("requests.get", lambda url, headers=None, **kwargs: ErrResp())
 
     # Act / Assert
     with pytest.raises(Exception) as exc:
@@ -177,7 +189,7 @@ def test_get_changed_files_and_languages_is_case_insensitive_and_handles_duplica
     # Assert
     assert "python" in result
     # All paths preserved (duplicates preserved as per logic)
-    assert result["python"].count("Path/To/Script.PY".lower() if False else "Path/To/Script.PY") >= 1
+    assert "Path/To/Script.PY" in result["python"]
     assert len(result["python"]) == 3
 
 
@@ -266,7 +278,7 @@ def test_post_review_comment_success_posts_and_returns_json(monkeypatch, tmp_pat
         def json(self):
             return {"html_url": "https://github.com/owner/repo/pull/1#issuecomment-1"}
 
-    def fake_post(url, headers=None, json=None):
+    def fake_post(url, headers=None, json=None, **kwargs):
         # Assert inside act: ensure payload shape
         assert "body" in json
         return FakeResponse()
@@ -287,7 +299,7 @@ def test_post_review_comment_failure_raises_exception(monkeypatch, tmp_path):
         status_code = 400
         def json(self):
             return {"message": "bad request"}
-    monkeypatch.setattr("requests.post", lambda url, headers=None, json=None: BadResp())
+    monkeypatch.setattr("requests.post", lambda url, headers=None, json=None, **kwargs: BadResp())
 
     # Act / Assert
     with pytest.raises(Exception) as excinfo:
@@ -336,6 +348,83 @@ def test_safe_truncate_appends_marker_when_no_newline_in_truncated_region(monkey
     # Assert
     assert truncated.endswith(" ... (Output truncated)")
     assert len(truncated) <= max_len + len(" ... (Output truncated)") + 1
+
+
+def test_import_without_api_key_raises_value_error(monkeypatch, tmp_path):
+    # Arrange / Act / Assert
+    with pytest.raises(ValueError) as excinfo:
+        import_main_module(tmp_path, monkeypatch, set_api_key=False)
+    assert "GROQ_API_KEY not found" in str(excinfo.value)
+
+
+def test_main_script_runs_full_flow(monkeypatch, capsys):
+    setup_fake_dependencies()
+    monkeypatch.setenv("API_KEY", "DUMMY_GROQ_KEY")
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    monkeypatch.setenv("OWNER", "octocat")
+    monkeypatch.setenv("REPO", "hello-world")
+    monkeypatch.setenv("PR_NUMBER", "42")
+
+    class FakePRResponse:
+        status_code = 200
+
+        def json(self):
+            return {"diff_url": "https://example.com/diff"}
+
+    class FakeDiffResponse:
+        status_code = 200
+        text = "+++ b/src/file.py\n- old\n+ new\n"
+
+    call_state = {"count": 0}
+
+    def fake_get(url, headers=None, **kwargs):
+        call_state["count"] += 1
+        if call_state["count"] == 1:
+            return FakePRResponse()
+        return FakeDiffResponse()
+
+    class FakePostResponse:
+        status_code = 201
+
+        def json(self):
+            return {"html_url": "https://example.com/comment/1"}
+
+    recorded_post = {}
+
+    def fake_post(url, headers=None, json=None, **kwargs):
+        recorded_post["url"] = url
+        recorded_post["body"] = json["body"]
+        return FakePostResponse()
+
+    def fake_run(cmd, capture_output, text, check, timeout):
+        class Result:
+            stdout = "analysis ok"
+            stderr = ""
+
+        return Result()
+
+    monkeypatch.setattr("requests.get", fake_get)
+    monkeypatch.setattr("requests.post", fake_post)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    runpy.run_path(str(Path(__file__).resolve().parent / "main.py"), run_name="__main__")
+
+    captured = capsys.readouterr().out
+    assert " Diff fetched successfully." in captured
+    assert recorded_post["body"] == "DUMMY_REVIEW_TEXT"
+    assert "Review posted at" in captured
+
+
+def test_main_script_reports_missing_github_config(monkeypatch, capsys):
+    setup_fake_dependencies()
+    monkeypatch.setenv("API_KEY", "DUMMY_GROQ_KEY")
+    for var in ["GITHUB_TOKEN", "OWNER", "REPO", "PR_NUMBER"]:
+        monkeypatch.delenv(var, raising=False)
+
+    runpy.run_path(str(Path(__file__).resolve().parent / "main.py"), run_name="__main__")
+
+    captured = capsys.readouterr().out
+    assert "Error: Cannot proceed. Missing GitHub configuration" in captured
 
 
 # End of tests
