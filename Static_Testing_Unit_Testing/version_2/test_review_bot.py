@@ -33,8 +33,7 @@ def import_review_module(monkeypatch):
     sys.modules["groq"] = fake_groq
 
     # Import the target module by path relative to this test file
-    project_root = Path(__file__).resolve().parents[2]
-    target_path = project_root / "Versions" / "version_2" / "review_bot.py"
+    target_path = Path(__file__).resolve().parent / "review_bot.py"
     spec = importlib.util.spec_from_file_location("review_bot", str(target_path))
     module = importlib.util.module_from_spec(spec)
     sys.modules["review_bot"] = module
@@ -112,7 +111,7 @@ def test_fetch_diff_success(monkeypatch):
 
     calls = {"n": 0}
 
-    def fake_get(url, headers=None):
+    def fake_get(url, headers=None, **kwargs):
         calls["n"] += 1
         return FakeResp1() if calls["n"] == 1 else FakeResp2()
 
@@ -127,33 +126,17 @@ def test_fetch_diff_success(monkeypatch):
 
 def test_fetch_diff_raises_on_http_error(monkeypatch):
     # Arrange
-    project_root = Path(__file__).resolve().parents[2]
-    target_path = project_root / "Versions" / "version_2" / "review_bot.py"
-    # Import with missing env to trigger SystemExit when module imported without env
-    # Here we simulate response.raise_for_status raising an exception
-    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
-    monkeypatch.setenv("PR_NUMBER", "1")
-    monkeypatch.setenv("GITHUB_TOKEN", "token")
-    monkeypatch.setenv("GROQ_API_KEY", "groqkey")
+    module = import_review_module(monkeypatch)
 
-    spec = importlib.util.spec_from_file_location("review_bot_err", str(target_path))
-    module = importlib.util.module_from_spec(spec)
-    # stub requests to have raise_for_status raise
     class BadResp:
         def raise_for_status(self):
-            raise module.requests.HTTPError("bad status")
+            raise RuntimeError("bad status")
 
-    # Temporarily insert a fake requests into sys.modules so module-level import will use it
-    fake_requests = types.SimpleNamespace(get=lambda *a, **k: BadResp(), HTTPError=Exception)
-    sys.modules["requests"] = fake_requests
-    # Execute module import
-    spec.loader.exec_module(module)
-
-    # Now monkeypatch the module's requests.get to return BadResp for the first call
+    fake_requests = types.SimpleNamespace(get=lambda *a, **k: BadResp())
     monkeypatch.setattr(module, "requests", fake_requests)
 
     # Act / Assert
-    with pytest.raises(Exception):
+    with pytest.raises(RuntimeError):
         module.fetch_diff()
 
 
@@ -168,7 +151,7 @@ def test_post_comment_success(monkeypatch):
         def raise_for_status(self):
             return None
 
-    def fake_post(url, headers=None, json=None):
+    def fake_post(url, headers=None, json=None, **kwargs):
         assert isinstance(json, dict)
         assert "body" in json
         return FakeResp()
