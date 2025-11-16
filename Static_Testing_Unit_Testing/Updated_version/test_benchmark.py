@@ -68,8 +68,11 @@ def test_benchmark_single_prompt_successful_run_returns_expected_result_and_writ
     monkeypatch.setattr(mod, "run_prompt", lambda prompt, diff: ("REVIEW_TEXT", "STATIC_OUT", "CTX"))
     monkeypatch.setattr(mod, "heuristic_metrics", lambda review: {"h1": 1})
     monkeypatch.setattr(mod, "meta_evaluate", lambda diff, review, static_output=None, context=None: ({"meta": 10}, "raw_meta"))
-    monkeypatch.setattr(mod, "combine_final_score", lambda meta_parsed, heur: 10)
-    monkeypatch.setattr(mod, "heuristics_to_score", lambda heur: 5)
+    monkeypatch.setattr(
+        mod,
+        "combine_final_score",
+        lambda meta_parsed, heur: (10, meta_parsed, 5)
+    )
 
     # deterministic times
     times = [100.0, 100.42]
@@ -128,8 +131,11 @@ def test_benchmark_run_prompt_exception_is_caught_and_reported(monkeypatch):
         return ({"error": "meta failed"}, "rawerr")
 
     monkeypatch.setattr(mod, "meta_evaluate", meta_eval_check)
-    monkeypatch.setattr(mod, "combine_final_score", lambda meta_parsed, heur: 0)
-    monkeypatch.setattr(mod, "heuristics_to_score", lambda heur: 0)
+    monkeypatch.setattr(
+        mod,
+        "combine_final_score",
+        lambda meta_parsed, heur: (0, None, 0)
+    )
 
     monkeypatch.setattr(mod.time, "time", lambda: 1.0)
     monkeypatch.setattr(mod.time, "sleep", lambda _x: None)
@@ -171,10 +177,10 @@ def test_benchmark_multiple_prompts_results_include_all_and_sorted_by_final_scor
 
     def combine_scores(meta_parsed, heur):
         rev = getattr(mod, "_last_review", "")
-        return {"rev_A": 30, "rev_B": 10, "rev_C": 20}.get(rev, 0)
+        score = {"rev_A": 30, "rev_B": 10, "rev_C": 20}.get(rev, 0)
+        return (score, None, score / 10)
 
     monkeypatch.setattr(mod, "combine_final_score", combine_scores)
-    monkeypatch.setattr(mod, "heuristics_to_score", lambda heur: 0)
 
     # deterministic time values
     tvals = [0.0] * 6
@@ -208,8 +214,11 @@ def test_benchmark_handles_non_dict_meta_parsed_treated_as_no_meta(monkeypatch):
 
     # meta_evaluate returns a string rather than dict
     monkeypatch.setattr(mod, "meta_evaluate", lambda diff, review, static_output=None, context=None: ("not-a-dict", "raw"))
-    monkeypatch.setattr(mod, "combine_final_score", lambda meta_parsed, heur: 5)
-    monkeypatch.setattr(mod, "heuristics_to_score", lambda heur: 1)
+    monkeypatch.setattr(
+        mod,
+        "combine_final_score",
+        lambda meta_parsed, heur: (5, None, 1)
+    )
 
     monkeypatch.setattr(mod.time, "time", lambda: 0.0)
     monkeypatch.setattr(mod.time, "sleep", lambda _x: None)
@@ -236,17 +245,17 @@ def test_benchmark_non_numeric_final_scores_are_sorted_as_zero(monkeypatch):
     monkeypatch.setattr(mod, "heuristic_metrics", lambda review: {})
 
     def meta_eval(diff, review, static_output=None, context=None):
-        return ({}, "")
+        return ({"id": review}, "")
 
     monkeypatch.setattr(mod, "meta_evaluate", meta_eval)
 
     # produce non-numeric for p1 and numeric for p2
     def combine(meta_parsed, heur):
-        return "NaN" if meta_parsed == {} else 5
+        if meta_parsed.get("id") == "rev_a":
+            return ("NaN", None, 0)
+        return (5, None, 0)
 
-    # We map review text to chosen behaviour in combine by wrapper
-    monkeypatch.setattr(mod, "combine_final_score", lambda meta_parsed, heur: ("NaN" if meta_parsed == {} else 5))
-    monkeypatch.setattr(mod, "heuristics_to_score", lambda h: 0)
+    monkeypatch.setattr(mod, "combine_final_score", combine)
 
     tvals = [0.0] * 4
     monkeypatch.setattr(mod.time, "time", lambda: tvals.pop(0))
@@ -275,8 +284,11 @@ def test_benchmark_save_text_to_file_raising_propagates_exception(monkeypatch):
     monkeypatch.setattr(mod, "run_prompt", lambda p, d: ("r", "s", "c"))
     monkeypatch.setattr(mod, "heuristic_metrics", lambda review: {})
     monkeypatch.setattr(mod, "meta_evaluate", lambda diff, review, static_output=None, context=None: ({}, ""))
-    monkeypatch.setattr(mod, "combine_final_score", lambda meta_parsed, heur: 1)
-    monkeypatch.setattr(mod, "heuristics_to_score", lambda h: 0)
+    monkeypatch.setattr(
+        mod,
+        "combine_final_score",
+        lambda meta_parsed, heur: (1, None, 0)
+    )
 
     monkeypatch.setattr(mod.time, "time", lambda: 0.0)
     monkeypatch.setattr(mod.time, "sleep", lambda _x: None)

@@ -9,6 +9,7 @@ import os
 import sys
 import types
 import importlib.util
+import runpy
 import pytest
 
 
@@ -81,6 +82,79 @@ def _import_rag_core_with_stubs():
             sys.modules[name] = original
 
     return mod
+
+
+def _run_rag_core_main_with_stubs(raise_error=False):
+    """Execute rag_core.py as __main__ with stubbed dependencies for coverage."""
+    originals = {}
+
+    def _set_module(name, module_obj):
+        originals[name] = sys.modules.get(name)
+        sys.modules[name] = module_obj
+
+    # Stub config
+    cfg = types.ModuleType("config")
+    cfg.PINECONE_INDEX_NAME = "main-test-index"
+    _set_module("config", cfg)
+
+    class DummyEmbeddings:
+        def __init__(self, model_name):
+            self.model_name = model_name
+
+    hf = types.ModuleType("langchain_huggingface")
+    hf.HuggingFaceEmbeddings = DummyEmbeddings
+    _set_module("langchain_huggingface", hf)
+
+    class DummyDoc:
+        def __init__(self, idx):
+            self.metadata = {"source": f"doc-{idx}"}
+            self.page_content = f"content-{idx}" * 5
+
+    class DummyRetriever:
+        def __init__(self, should_fail=False):
+            self.should_fail = should_fail
+            self.kwargs = {}
+
+        def invoke(self, query):
+            if self.should_fail:
+                raise ConnectionError("retriever failure")
+            return [DummyDoc(1), DummyDoc(2)]
+
+    class DummyVectorStore:
+        def __init__(self, index_name, embedding):
+            self.index_name = index_name
+            self.embedding = embedding
+
+        def as_retriever(self, search_kwargs):
+            retriever = DummyRetriever(should_fail=raise_error)
+            retriever.kwargs = search_kwargs
+            return retriever
+
+    class DummyVectorStoreFactory:
+        @staticmethod
+        def from_existing_index(index_name, embedding):
+            if not index_name:
+                raise ValueError("index_name must be provided")
+            return DummyVectorStore(index_name, embedding)
+
+    pc = types.ModuleType("langchain_pinecone")
+    pc.PineconeVectorStore = DummyVectorStoreFactory
+    _set_module("langchain_pinecone", pc)
+
+    lc_retrievers = types.ModuleType("langchain_core.retrievers")
+    lc_retrievers.BaseRetriever = object
+    _set_module("langchain_core.retrievers", lc_retrievers)
+
+    try:
+        here = os.path.dirname(__file__)
+        path = os.path.join(here, "rag_core.py")
+        runpy.run_path(path, run_name="__main__")
+    finally:
+        for name, original in originals.items():
+            if original is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = original
 
 
 # ===== Tests for _get_embeddings() =====
@@ -169,3 +243,20 @@ def test_get_vector_store_raises_when_pinecone_index_missing(monkeypatch):
 
     with pytest.raises(ValueError):
         mod._get_vector_store()
+
+
+# ===== Tests for __main__ execution block =====
+
+
+def test_rag_core_main_block_prints_results(capsys):
+    _run_rag_core_main_with_stubs(raise_error=False)
+    captured = capsys.readouterr().out
+    assert "Retriever test:" in captured
+    assert "Found 2 relevant chunks" in captured
+
+
+def test_rag_core_main_block_handles_errors(capsys):
+    _run_rag_core_main_with_stubs(raise_error=True)
+    captured = capsys.readouterr().out
+    assert "Test failed:" in captured
+    assert "retriever failure" in captured
