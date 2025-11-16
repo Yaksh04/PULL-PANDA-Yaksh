@@ -12,7 +12,7 @@
   
     "build:client": "vite build && rm -rf client-dist && mv dist client-dist",
   
-    "build:server": "esbuild server/index.ts --bundle --platform=node --format=esm --target=node18 --external:express --external:express-session --external:cors --external:dotenv --external:@octokit/* --external:node:* --outfile=dist/server/index.js",
+    "build:server": "tsc -p tsconfig.server.json",
   
     "start": "node dist/server/index.js"
   },
