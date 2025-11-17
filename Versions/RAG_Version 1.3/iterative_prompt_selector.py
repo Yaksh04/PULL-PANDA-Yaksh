@@ -14,11 +14,10 @@ from config import OWNER, REPO, GITHUB_TOKEN, PR_NUMBER
 from prompts import get_prompts
 from accuracy_checker import heuristic_metrics, meta_evaluate
 
-# --- NEW IMPORTS ---
+# NEW IMPORTS
 from static_analysis import run_static_analysis
 from rag_core import get_retriever
 from utils import safe_truncate
-# ---------------------
 
 class IterativePromptSelector:
     def __init__(self):
@@ -167,7 +166,7 @@ class IterativePromptSelector:
                     all_y.append(scr)
                 self.model.partial_fit(all_X, all_y)
 
-    # --- MODIFIED: generate_review now runs RAG and Static Analysis ---
+    #  MODIFIED: generate_review now runs RAG and Static Analysis ---
     def generate_review(self, diff_text, selected_prompt):
         """Generate review using RAG, static analysis, and the selected prompt"""
         chain = self.prompts[selected_prompt] | llm | parser
@@ -175,7 +174,8 @@ class IterativePromptSelector:
 
         # 1. Run Static Analysis
         print("  Running static analysis...")
-        static_output = run_static_analysis(diff_text)
+        # Pass the owner, repo, and PR number to the fixed function
+        static_output = run_static_analysis(diff_text, OWNER, REPO, PR_NUMBER)
         
         # 2. Run RAG
         print("  Running RAG retrieval...")
@@ -200,7 +200,7 @@ class IterativePromptSelector:
         # Return all generated artifacts
         return review_text, elapsed, static_output, retrieved_context
 
-    # --- MODIFIED: evaluate_review now accepts static/context ---
+    #  MODIFIED: evaluate_review now accepts static/context ---
     def evaluate_review(self, diff_text, review_text, static_output, context):
         """Evaluate the generated review"""
         heur = heuristic_metrics(review_text)
@@ -308,7 +308,7 @@ class IterativePromptSelector:
             print(f"Error loading state: {e}. Continuing with current data.")
             return False
 
-    # --- MODIFIED: process_pr now handles the full RAG/static pipeline ---
+    #  MODIFIED: process_pr now handles the full RAG/static pipeline ---
     def process_pr(self, pr_number, owner=OWNER, repo=REPO, token=GITHUB_TOKEN, post_to_github: bool = True):
         """Process a single PR using iterative prompt selection"""
         print(f"Processing PR #{pr_number}...")
@@ -362,7 +362,7 @@ class IterativePromptSelector:
             "generation_time": elapsed
         }
     
-    # --- MODIFIED: save_results now saves the static/context ---
+    #  MODIFIED: save_results now saves the static/context ---
     def save_results(self, pr_number, features, prompt, review, score, heur, meta_parsed, static_output, context):
         """Save all results, including static analysis and RAG context"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -396,9 +396,13 @@ class IterativePromptSelector:
             f"## 🤖 AI Review\n\n{review}\n\n"
             f"---\n\n"
             f"## 🔍 Static Analysis Output\n\n"
-            f"```\n{static_output}\n```\n\n"
+            f"\n{static_output}\n\n\n"
             f"---\n\n"
-            f"## 🧠 Retrieved RAG Context\n\n{context}\n"
+            f"## 🧠 Retrieved RAG Context\n\n"
+            f"<details>\n"  # added to make the md file cleaner
+            f"<summary>Click to expand the full retrieved context</summary>\n\n" 
+            f"```\n{context}\n```\n"
+            f"</details>\n" # added to make the md file cleaner
         )
         save_text_to_file(review_filename, content)
         
