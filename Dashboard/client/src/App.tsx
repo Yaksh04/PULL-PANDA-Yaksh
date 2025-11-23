@@ -121,7 +121,7 @@ import Dashboard from "@/pages/Dashboard";
 import PullRequests from "@/pages/PullRequests";
 import Reviews from "@/pages/Reviews";
 import Analytics from "@/pages/Analytics";
-import PRDetails from "@/pages/PRDetails";   // ← NEW PAGE
+import PRDetails from "@/pages/PRDetails"; // ← NEW PAGE
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
 
@@ -129,55 +129,91 @@ import ProtectedRoute from "./ProtectedRoute";
 
 import "./index.css";
 
+import { useEffect } from "react";
+import { useLocation } from "wouter";
+
 export default function App() {
+  const [location, setLocation] = useLocation();
+
+  // Catch the token from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+
+    if (token) {
+      console.log("🔑 Token found in URL. Saving to storage...");
+      localStorage.setItem("github_token", token);
+
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      // Force user to dashboard if they were stuck on login
+      if (location === "/login") {
+        setLocation("/");
+      }
+    }
+  }, [location, setLocation]);
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ThemeProvider defaultTheme="dark">
           <Switch>
-
             {/* PUBLIC LOGIN ROUTE */}
             <Route path="/login">
               <Login />
             </Route>
 
             {/* PROTECTED ROUTES */}
-            <Route path="/" component={() => (
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            )} />
+            <Route
+              path="/"
+              component={() => (
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              )}
+            />
 
-            <Route path="/pull-requests" component={() => (
-              <ProtectedRoute>
-                <PullRequests />
-              </ProtectedRoute>
-            )} />
+            <Route
+              path="/pull-requests"
+              component={() => (
+                <ProtectedRoute>
+                  <PullRequests />
+                </ProtectedRoute>
+              )}
+            />
 
             {/* NEW: PR DETAILS ROUTE */}
-            <Route path="/pr-details" component={() => (
-              <ProtectedRoute>
-                <PRDetails />
-              </ProtectedRoute>
-            )} />
+            <Route
+              path="/pr-details/:owner/:repo/:number"
+              component={() => (
+                <ProtectedRoute>
+                  <PRDetails />
+                </ProtectedRoute>
+              )}
+            />
 
-            <Route path="/reviews" component={() => (
-              <ProtectedRoute>
-                <Reviews />
-              </ProtectedRoute>
-            )} />
+            <Route
+              path="/reviews"
+              component={() => (
+                <ProtectedRoute>
+                  <Reviews />
+                </ProtectedRoute>
+              )}
+            />
 
-            <Route path="/analytics" component={() => (
-              <ProtectedRoute>
-                <Analytics />
-              </ProtectedRoute>
-            )} />
+            <Route
+              path="/analytics"
+              component={() => (
+                <ProtectedRoute>
+                  <Analytics />
+                </ProtectedRoute>
+              )}
+            />
 
             {/* 404 */}
             <Route>
               <NotFound />
             </Route>
-
           </Switch>
 
           <Toaster />

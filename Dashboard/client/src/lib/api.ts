@@ -62,3 +62,14 @@ export interface PRReviews {
   aiReviews: any[];
   allComments: any[];
 }
+export interface AIReviewResult {
+  id: number;
+  repoOwner: string;
+  repoName: string;
+  prNumber: number;
+  score: number;
+  summary: string;
+  staticAnalysis: string;
+  metadata: Record<string, any>;
+  createdAt: string;
+}
