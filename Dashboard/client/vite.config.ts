@@ -7,12 +7,11 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      // This allows access to shared code, assuming it's one level up
+      // Allow access to the shared folder (one level up)
       "@shared": path.resolve(__dirname, "../shared"),
     },
   },
-  // Since this file is IN client/, the root is the current directory
-  root: ".",
+  root: ".", // We are already in the client folder
   build: {
     outDir: "dist",
     emptyOutDir: true,
