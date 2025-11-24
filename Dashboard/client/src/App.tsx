@@ -121,7 +121,7 @@ import Dashboard from "@/pages/Dashboard";
 import PullRequests from "@/pages/PullRequests";
 import Reviews from "@/pages/Reviews";
 import Analytics from "@/pages/Analytics";
-import PRDetails from "@/pages/PRDetails"; // ← NEW PAGE
+import PRDetails from "@/pages/PRDetails";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
 
@@ -129,11 +129,14 @@ import ProtectedRoute from "./ProtectedRoute";
 
 import "./index.css";
 
-import { useEffect } from "react";
+// ADDED: useState import
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
 export default function App() {
   const [location, setLocation] = useLocation();
+  // ADDED: Loading state to prevent "Double Login"
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
   // Catch the token from URL
   useEffect(() => {
@@ -141,18 +144,31 @@ export default function App() {
     const token = params.get("token");
 
     if (token) {
-      console.log("🔑 Token found in URL. Saving to storage...");
+      console.log("Token found in URL. Saving to storage...");
       localStorage.setItem("github_token", token);
 
       // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname);
 
       // Force user to dashboard if they were stuck on login
-      if (location === "/login") {
+      if (window.location.pathname === "/login") {
         setLocation("/");
       }
     }
-  }, [location, setLocation]);
+
+    // KEY FIX: Mark auth check as complete so the app can render
+    setIsAuthReady(true);
+  }, [setLocation]);
+
+  // KEY FIX: Don't render ProtectedRoute until we have checked for the URL token
+  if (!isAuthReady) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        Loading...
+      </div>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -182,7 +198,6 @@ export default function App() {
               )}
             />
 
-            {/* NEW: PR DETAILS ROUTE */}
             <Route
               path="/pr-details/:owner/:repo/:number"
               component={() => (
