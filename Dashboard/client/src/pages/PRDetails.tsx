@@ -1,8 +1,9 @@
 // SWE_project_website/client/src/pages/PRDetails.tsx
 
+import ReactMarkdown from "react-markdown"; //so that review can be viewed as proper markdown
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useRoute } from "wouter"; // ✅ Added useRoute
+import { useLocation, useRoute } from "wouter"; // Added useRoute
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -165,8 +166,7 @@ export default function PRDetails() {
 
               {latestAIComment ? (
                 <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap">
-                  {/* Ideally use ReactMarkdown here, but text works for now */}
-                  {latestAIComment.body}
+                  <ReactMarkdown>{latestAIComment.body}</ReactMarkdown>
                 </div>
               ) : (
                 <div className="text-muted-foreground italic">
