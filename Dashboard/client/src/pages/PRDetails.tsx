@@ -36,7 +36,7 @@ interface PRComment {
 export default function PRDetails() {
   const [, setLocation] = useLocation();
 
-  // ✅ FIX: Use useRoute to get parameters from /pr-details/:owner/:repo/:number
+  // FIX: Use useRoute to get parameters from /pr-details/:owner/:repo/:number
   const [match, params] = useRoute("/pr-details/:owner/:repo/:number");
 
   const owner = match ? params?.owner : null;
@@ -165,8 +165,56 @@ export default function PRDetails() {
               </h2>
 
               {latestAIComment ? (
-                <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap">
-                  <ReactMarkdown>{latestAIComment.body}</ReactMarkdown>
+                <div className="text-sm text-muted-foreground">
+                  <ReactMarkdown
+                    components={{
+                      hr: () => <hr className="my-3 border-border" />,
+
+                      strong: ({ children }) => (
+                        <span className="font-semibold text-foreground">
+                          {children}
+                        </span>
+                      ),
+
+                      ul: ({ children }) => (
+                        <ul className="list-disc pl-4 mb-2 space-y-1">
+                          {children}
+                        </ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol className="list-decimal pl-4 mb-2 space-y-1">
+                          {children}
+                        </ol>
+                      ),
+                      li: ({ children }) => (
+                        <li className="pl-1">{children}</li>
+                      ),
+
+                      p: ({ children }) => (
+                        <p className="mb-2 leading-relaxed last:mb-0">
+                          {children}
+                        </p>
+                      ),
+
+                      h1: ({ children }) => (
+                        <h1 className="text-lg font-bold text-foreground mt-4 mb-2">
+                          {children}
+                        </h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 className="text-base font-bold text-foreground mt-3 mb-2">
+                          {children}
+                        </h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 className="text-sm font-semibold text-foreground mt-2 mb-1">
+                          {children}
+                        </h3>
+                      ),
+                    }}
+                  >
+                    {latestAIComment.body}
+                  </ReactMarkdown>
                 </div>
               ) : (
                 <div className="text-muted-foreground italic">
