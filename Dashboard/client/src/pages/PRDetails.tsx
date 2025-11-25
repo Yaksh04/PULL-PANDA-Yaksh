@@ -1,27 +1,19 @@
 // SWE_project_website/client/src/pages/PRDetails.tsx
 
-import ReactMarkdown from "react-markdown"; //so that review can be viewed as proper markdown
+import ReactMarkdown from "react-markdown";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useRoute } from "wouter"; // Added useRoute
+import { useLocation, useRoute } from "wouter";
 
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress"; // Optional: for score
+// Removed Progress import since we deleted the score card
 
-import {
-  ExternalLink,
-  ArrowLeft,
-  MessageSquare,
-  Bot,
-  AlertTriangle,
-  CheckCircle,
-} from "lucide-react";
+import { ExternalLink, ArrowLeft, MessageSquare, Bot } from "lucide-react";
 
 import { apiFetch } from "@/lib/apiClient";
-import { AIReviewResult } from "@/lib/api"; // Ensure this interface exists in api.ts
+// Removed AIReviewResult import
 
 interface PRComment {
   id: number;
@@ -35,8 +27,6 @@ interface PRComment {
 
 export default function PRDetails() {
   const [, setLocation] = useLocation();
-
-  // FIX: Use useRoute to get parameters from /pr-details/:owner/:repo/:number
   const [match, params] = useRoute("/pr-details/:owner/:repo/:number");
 
   const owner = match ? params?.owner : null;
@@ -58,14 +48,6 @@ export default function PRDetails() {
     enabled: !!owner && !!repo && !!number,
   });
 
-  // 2. Fetch Rich AI Stats from DB (The Score & Semgrep Data)
-  const { data: aiStats, isLoading: loadingStats } = useQuery<AIReviewResult>({
-    queryKey: ["ai-analysis", owner, repo, number],
-    queryFn: () =>
-      owner ? apiFetch(`/api/ai-analysis/${owner}/${repo}/${number}`) : null,
-    enabled: !!owner && !!repo && !!number,
-  });
-
   // Process GitHub comments
   useEffect(() => {
     if (!githubData) return;
@@ -77,7 +59,7 @@ export default function PRDetails() {
       .filter(
         (c: PRComment) =>
           c.body?.toLowerCase().includes("ai-powered review") ||
-          c.user.login.includes("bot") // Adjust based on your bot's name
+          c.user.login.includes("bot")
       )
       .sort(
         (a: PRComment, b: PRComment) =>
@@ -125,7 +107,7 @@ export default function PRDetails() {
       </div>
 
       {/* LOADING */}
-      {(loadingGithub || loadingStats) && (
+      {loadingGithub && (
         <div className="space-y-4">
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-64 w-full" />
@@ -137,27 +119,9 @@ export default function PRDetails() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* LEFT COL: AI INSIGHTS */}
           <div className="md:col-span-2 space-y-6">
-            {/* 1. SCORE CARD (Only if DB data exists) */}
-            {aiStats && (
-              <Card className="p-6 border-l-4 border-l-primary">
-                <h2 className="text-lg font-semibold mb-4">AI Quality Score</h2>
-                <div className="flex items-center gap-4">
-                  <div className="text-4xl font-bold text-primary">
-                    {aiStats.score}/100
-                  </div>
-                  <Progress value={aiStats.score} className="w-1/2 h-4" />
-                </div>
-                {aiStats.staticAnalysis && (
-                  <div className="mt-4 p-4 bg-muted/50 rounded-md text-sm font-mono whitespace-pre-wrap max-h-60 overflow-y-auto">
-                    <strong>Static Analysis Logs:</strong>
-                    <br />
-                    {aiStats.staticAnalysis}
-                  </div>
-                )}
-              </Card>
-            )}
+            {/* REMOVED SCORE CARD SECTION */}
 
-            {/* 2. THE REVIEW TEXT */}
+            {/* THE REVIEW TEXT */}
             <Card className="p-6">
               <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
                 <Bot className="h-5 w-5 text-blue-500" />
@@ -169,13 +133,11 @@ export default function PRDetails() {
                   <ReactMarkdown
                     components={{
                       hr: () => <hr className="my-3 border-border" />,
-
                       strong: ({ children }) => (
                         <span className="font-semibold text-foreground">
                           {children}
                         </span>
                       ),
-
                       ul: ({ children }) => (
                         <ul className="list-disc pl-4 mb-2 space-y-1">
                           {children}
@@ -189,13 +151,11 @@ export default function PRDetails() {
                       li: ({ children }) => (
                         <li className="pl-1">{children}</li>
                       ),
-
                       p: ({ children }) => (
                         <p className="mb-2 leading-relaxed last:mb-0">
                           {children}
                         </p>
                       ),
-
                       h1: ({ children }) => (
                         <h1 className="text-lg font-bold text-foreground mt-4 mb-2">
                           {children}
