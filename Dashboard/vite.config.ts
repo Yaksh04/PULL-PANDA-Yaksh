@@ -32,7 +32,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
 
-  // ⭐ FIXED: Run frontend on port 3000
+  // FIXED: Run frontend on port 3000
   server: {
     port: 3000,
     fs: {

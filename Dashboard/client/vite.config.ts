@@ -7,8 +7,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      // Allow access to the shared folder (one level up)
-      "@shared": path.resolve(__dirname, "../shared"),
     },
   },
   root: ".", // We are already in the client folder
