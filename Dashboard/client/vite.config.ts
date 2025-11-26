@@ -10,6 +10,7 @@ export default defineConfig({
     },
   },
   root: ".", // We are already in the client folder
+  publicDir: "public",
   build: {
     outDir: "dist",
     emptyOutDir: true,
